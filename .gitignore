@@ -25,3 +25,7 @@ Thumbs.db
 
 # 审查导出文件
 review_diff.txt
+
+# 测试与审查输出
+test_output.txt
+第一批-红证据.txt
