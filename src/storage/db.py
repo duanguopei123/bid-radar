@@ -29,6 +29,9 @@ class Database:
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
+        # 允许定时任务与手动运行并存，避免 database is locked
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self.conn.execute("PRAGMA busy_timeout=5000")
         self._init_schema()
 
     def _init_schema(self) -> None:
@@ -37,10 +40,13 @@ class Database:
 
     # ---------- 公告增量与去重 ----------
     def identity_hash(self, notice: Notice) -> str:
-        """去重键：优先公告 ID，缺失时用原文链接哈希。"""
+        """去重键：优先公告 ID，其次原文链接，最后退化为标题+采购人。
+
+        避免 notice_id 与 source_url 同时为空时，所有公告撞进同一个键。
+        """
         import hashlib
-        key = f"{notice.source}:{notice.notice_id or notice.source_url}"
-        return hashlib.sha256(key.encode("utf-8")).hexdigest()
+        key = notice.notice_id or notice.source_url or f"{notice.title}|{notice.purchaser}"
+        return hashlib.sha256(f"{notice.source}:{key}".encode("utf-8")).hexdigest()
 
     def get_notice(self, identity_hash: str) -> sqlite3.Row | None:
         return self.conn.execute(

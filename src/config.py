@@ -58,7 +58,4 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
         else:
             app[key] = str(p)
 
-    for d in cfg.get("datasources", []):
-        if d.get("type") == "mock":
-            pass  # mock 数据源不需要外部配置
     return cfg

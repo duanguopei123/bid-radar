@@ -4,14 +4,25 @@
 """
 from __future__ import annotations
 
+import logging
+
 from ..models import DimensionScore, MatchResult, Notice
 from . import rules
+
+logger = logging.getLogger(__name__)
 
 
 def score_notice(notice: Notice, cfg: dict) -> MatchResult:
     company = cfg["company"]
     mcfg = cfg["matching"]
     weights = mcfg["weights"]
+
+    total_weight = sum(float(v) for v in weights.values())
+    if abs(total_weight - 100) > 1:
+        logger.warning(
+            "matching.weights 总和为 %.1f（应为 100），总分将按实际权重累加，请检查 config.yaml",
+            total_weight,
+        )
 
     dims: list[DimensionScore] = []
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from .adapters.base import DataSourceAdapter
 from .brief import render_html, render_markdown
@@ -28,11 +29,29 @@ class Pipeline:
         self.notifier = notifier
         self.llm = build_provider(cfg.get("llm", {}), db=db)
 
-    def run(self) -> dict:
-        run_id = datetime.now().strftime("%Y%m%d%H%M%S")
+    def _now(self) -> datetime:
+        """按配置时区取当前时间（默认东八区），避免本机时区与 UTC 混用导致跨天错位。"""
+        tz_name = (self.cfg.get("app") or {}).get("timezone", "Asia/Shanghai")
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = None
+        return datetime.now(tz) if tz else datetime.now()
+
+    def run(self, include_unchanged: bool = False) -> dict:
+        """跑一次完整流程。
+
+        include_unchanged=False：只处理新增/更新的公告（每日增量简报，默认）；
+        include_unchanged=True：连内容未变化的也一并展示（当前全部可投项目，用于看板/复盘）。
+        """
+        run_id = self._now().strftime("%Y%m%d%H%M%S")
         self.db.audit("fetch", f"开始采集（数据源：{self.adapter.name}）", ref_id=run_id)
 
-        notices = self.adapter.fetch()
+        try:
+            notices = self.adapter.fetch()
+        except Exception as exc:
+            self.db.audit("fetch", f"采集失败：{exc}", ref_id=run_id, level="ERROR")
+            raise
         self.db.audit("fetch", f"采集完成，共 {len(notices)} 条公告", ref_id=run_id,
                       detail={"count": len(notices), "source": self.adapter.name})
 
@@ -45,8 +64,8 @@ class Pipeline:
             self.db.audit("fetch", f"公告入库：{notice.notice_id}（{change}）",
                           ref_id=notice.notice_id,
                           detail={"source_url": notice.source_url, "fetched_at": notice.fetched_at.isoformat()})
-            if change == "unchanged":
-                # 内容未变化的旧公告不重复推送
+            if change == "unchanged" and not include_unchanged:
+                # 内容未变化的旧公告不重复推送；--all 模式下仍纳入展示
                 continue
 
             result = score_notice(notice, self.cfg)
@@ -64,7 +83,7 @@ class Pipeline:
                 items_for_brief.append((pk, result.score, change))
 
         # 简报只针对本轮新增/更新且推荐的项目；历史已推过的 unchanged 不重复出现
-        run_date = datetime.now().strftime("%Y-%m-%d")
+        run_date = self._now().strftime("%Y-%m-%d")
         owner = self.cfg.get("owner_email", "")
         md = render_markdown(results, run_date, owner)
         html = render_html(results, run_date, owner)
@@ -82,7 +101,12 @@ class Pipeline:
 
         pushed = False
         if self.notifier and self.cfg.get("notifier", {}).get("enabled", False):
-            pushed = self.notifier.send(f"招投标机会日报 {run_date}", md)
+            try:
+                pushed = bool(self.notifier.send(f"招投标机会日报 {run_date}", md))
+                self.db.audit("push", f"简报推送{'成功' if pushed else '未发送'}", ref_id=run_id)
+            except Exception as exc:
+                # 推送失败不影响已生成的简报，留痕后继续返回结果
+                self.db.audit("push", f"简报推送失败：{exc}", ref_id=run_id, level="ERROR")
         else:
             self.db.audit("push", "通知器未启用，仅生成简报文件", ref_id=run_id)
 

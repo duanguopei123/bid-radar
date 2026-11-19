@@ -1,7 +1,7 @@
 @echo off
 cd /d "C:\Users\ZJ\WorkBuddy\2026-11-19-14-31-48\bid-radar"
-echo === Bid Radar: running daily pipeline... ===
-"C:\Users\ZJ\AppData\Local\Programs\Python\Python313\python.exe" run_once.py
+echo === Bid Radar: running daily pipeline (all projects view) ===
+"C:\Users\ZJ\AppData\Local\Programs\Python\Python313\python.exe" run_once.py --all
 echo.
 echo === Opening latest brief in browser... ===
 set "LATEST="

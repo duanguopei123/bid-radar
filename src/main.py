@@ -38,10 +38,10 @@ def build_pipeline(cfg: dict) -> Pipeline:
     return Pipeline(cfg, adapter, db, notifier)
 
 
-def cmd_run_once(cfg: dict) -> dict:
+def cmd_run_once(cfg: dict, include_unchanged: bool = False) -> dict:
     pipeline = build_pipeline(cfg)
     try:
-        result = pipeline.run()
+        result = pipeline.run(include_unchanged=include_unchanged)
     finally:
         pipeline.db.close()
     print(json.dumps(result, ensure_ascii=False, indent=2))

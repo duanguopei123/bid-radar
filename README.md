@@ -46,7 +46,7 @@ flowchart TD
 ## 三、目录结构
 
 ```
-bidding-monitor/
+bid-radar/
 ├── README.md                    # 本文档
 ├── .env.example                 # 环境变量模板（密钥走这里）
 ├── config.yaml                  # 公司画像、权重、调度、数据源、LLM/通知器开关
@@ -119,7 +119,8 @@ pip install -r requirements.txt
 cp .env.example .env
 
 # 4. ★ run-once：立即跑通全流程，在 out/ 输出简报
-python run_once.py
+python run_once.py          # 只报今日新增/更新（每日增量）
+python run_once.py --all    # 展示当前全部可投项目（看板/复盘/演示）
 
 # 5. 运行测试（9 项，含打分单测 + mock 集成测试）
 python -m pytest tests/ -q
@@ -244,9 +245,24 @@ def main_handler(event, context):
 
 - [x] 阶段 0：仓库初始化（GitHub: duanguopei123/bid-radar）
 - [x] 阶段 1：CodeBuddy 生成 MVP 初版（已由 bidding-monitor 目录并入本仓库 bid-radar）
-- [ ] 阶段 2：Codex review 把关
+- [x] 阶段 2：代码审查把关（15 项测试全部通过，修复 8 处缺陷，见下方修复记录）
 - [ ] 阶段 3：CodeBuddy 补生态
 - [ ] 阶段 4：人工验收
 
-**双击入口**：`启动工作台.bat`——自动跑当日流程，并用浏览器打开最新简报。
+**双击入口**：`启动工作台.bat`——自动跑当日流程（全量视图），并用浏览器打开最新简报。
 **项目位置**：`C:\Users\ZJ\WorkBuddy\2026-11-19-14-31-48\bid-radar`
+
+### 阶段 2 审查修复记录（8 处）
+
+| # | 问题 | 修复 |
+|---|------|------|
+| 1 | 地区判断用字符长度区分省/市，「江苏省」被当作城市给满分 | 改为按「省/自治区/特别行政区」后缀判断，城市命中优先 |
+| 2 | 推送失败会中断整个流程，已生成的简报拿不到结果 | try/except 包裹，失败留痕但不中断 |
+| 3 | 采集异常直接崩溃且无留痕 | 记录 ERROR 审计后抛出，便于调度器重试 |
+| 4 | 简报日期用本机时间、审计日志用 UTC，跨天会错位 | 统一按 config 的 `Asia/Shanghai` 取时间 |
+| 5 | 预算 0 被当作「低于下限」，摘要显示「未披露」，前后矛盾 | 0 与 None 统一视为未披露 |
+| 6 | 资质匹配写死了「道路运输经营许可证」特例 | 改为「全名 + 去后缀核心词」通用匹配 |
+| 7 | notice_id 与 source_url 同时为空时，所有公告撞同一去重键 | 增加「标题+采购人」兜底 |
+| 8 | 第二次运行必出空简报，双击入口像坏了 | 新增 `--all` 全量视图，双击默认使用 |
+
+配套新增 `tests/test_rules_edge.py`（6 个回归测试），总计 15 项测试。

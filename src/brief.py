@@ -23,7 +23,7 @@ def days_countdown(d: date | None) -> str:
 
 
 def _change_label(change_type: str) -> str:
-    return "更新" if change_type == "updated" else "新增"
+    return {"updated": "更新", "unchanged": "在库"}.get(change_type, "新增")
 
 
 def render_markdown(results: list[MatchResult], run_date: str, owner_email: str) -> str:
@@ -37,12 +37,14 @@ def render_markdown(results: list[MatchResult], run_date: str, owner_email: str)
         "",
     ]
     if not recommended:
-        lines.append("今日暂无符合推荐阈值的项目。")
+        lines.append("今日暂无新增的符合推荐阈值项目。")
+        lines.append("")
+        lines.append("提示：运行 `python run_once.py --all` 可查看当前全部可投项目。")
         return "\n".join(lines)
 
     for idx, r in enumerate(recommended, 1):
         n = r.notice
-        amount = f"{n.budget_amount / 10000:.1f} 万元" if n.budget_amount else "未披露"
+        amount = f"{n.budget_amount / 10000:.1f} 万元" if (n.budget_amount is not None and n.budget_amount > 0) else "未披露"
         lines += [
             f"## {idx}. [{_change_label(r.change_type)}] {n.title}",
             "",
@@ -91,10 +93,11 @@ def render_html(results: list[MatchResult], run_date: str, owner_email: str) -> 
         "本简报由只读监测系统生成，不含报名/提交动作；投标决策请人工确认。</p>",
     ]
     if not recommended:
-        parts.append("<p>今日暂无符合推荐阈值的项目。</p>")
+        parts.append("<p>今日暂无新增的符合推荐阈值项目。<br>"
+                     "<span class='meta'>提示：运行 <code>python run_once.py --all</code> 可查看当前全部可投项目。</span></p>")
     for r in recommended:
         n = r.notice
-        amount = f"{n.budget_amount / 10000:.1f} 万元" if n.budget_amount else "未披露"
+        amount = f"{n.budget_amount / 10000:.1f} 万元" if (n.budget_amount is not None and n.budget_amount > 0) else "未披露"
         parts.append("<div class='card'>")
         parts.append(
             f"<h2><span class='tag'>{_change_label(r.change_type)}</span> {esc(n.title)}</h2>"
