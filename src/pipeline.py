@@ -11,7 +11,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .adapters.base import DataSourceAdapter
-from .brief import render_html, render_markdown
+from .brief import render_html, render_markdown, render_push_summary
 from .llm.factory import build_provider
 from .matcher.scorer import score_notice
 from .models import MatchResult, Notice
@@ -156,6 +156,7 @@ class Pipeline:
         owner = self.cfg.get("owner_email", "")
         md = render_markdown(results, run_date, owner, business_date=business_date)
         html = render_html(results, run_date, owner, business_date=business_date)
+        push_text = render_push_summary(results, run_date, owner, business_date=business_date)
 
         out_dir = Path(self.cfg["app"]["out_dir"])
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -171,6 +172,7 @@ class Pipeline:
             str(md_path),
             str(html_path),
             items_for_brief,
+            push_text=push_text,
         )
         self.db.audit("brief", f"简报生成：{md_path.name} / {html_path.name}",
                       ref_id=run_id, detail={"count": len(items_for_brief)})
@@ -198,7 +200,7 @@ class Pipeline:
                 try:
                     sent = bool(self.notifier.send(
                         f"招投标机会日报 {delivery['run_date']}",
-                        delivery["markdown"],
+                        delivery["push_body"],
                     ))
                 except Exception as exc:  # noqa: BLE001 - 持久化为 failed 后续重试
                     delivery_failed = True

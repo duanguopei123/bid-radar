@@ -57,6 +57,14 @@ CREATE TABLE IF NOT EXISTS brief_items (
     change_type TEXT    NOT NULL
 );
 
+-- 手机推送用的短摘要：微信里一屏读完，详细内容仍在 briefs.markdown / html。
+-- 单独建表而不是给 briefs 加列，避免改动已有表结构。
+CREATE TABLE IF NOT EXISTS brief_push_texts (
+    brief_id    INTEGER PRIMARY KEY REFERENCES briefs(id),
+    body        TEXT    NOT NULL,
+    created_at  TEXT    NOT NULL
+);
+
 -- 全程留痕：采集日志 / 匹配理由 / 人工确认记录 / 推送结果
 CREATE TABLE IF NOT EXISTS audit_logs (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,

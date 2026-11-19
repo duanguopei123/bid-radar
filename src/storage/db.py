@@ -239,7 +239,8 @@ class Database:
     # ---------- 简报 ----------
     def save_brief(self, run_date: str, markdown: str, html: str,
                    md_path: str, html_path: str,
-                   items: Iterable[tuple[int, int, str]]) -> int:
+                   items: Iterable[tuple[int, int, str]],
+                   push_text: str = "") -> int:
         item_list = list(items)
         cur = self.conn.execute(
             """INSERT INTO briefs (run_date, markdown, html, md_path, html_path, item_count, created_at)
@@ -251,6 +252,12 @@ class Database:
             self.conn.execute(
                 "INSERT INTO brief_items (brief_id, notice_pk, score, change_type) VALUES (?,?,?,?)",
                 (bid, notice_pk, score, change),
+            )
+        if push_text:
+            self.conn.execute(
+                """INSERT OR REPLACE INTO brief_push_texts (brief_id, body, created_at)
+                   VALUES (?,?,?)""",
+                (bid, push_text, _now()),
             )
         self._ensure_brief_delivery(bid)
         self.conn.commit()
@@ -266,12 +273,14 @@ class Database:
         )
 
     def list_pending_brief_deliveries(self) -> list[sqlite3.Row]:
-        """返回待发送或上次发送失败的简报。"""
+        """返回待发送或上次发送失败的简报（优先带手机短摘要）。"""
         return self.conn.execute(
             """SELECT b.*, d.status AS delivery_status, d.attempts AS delivery_attempts,
-                      d.last_error AS delivery_error
+                      d.last_error AS delivery_error,
+                      COALESCE(p.body, b.markdown) AS push_body
                FROM brief_deliveries d
                JOIN briefs b ON b.id = d.brief_id
+               LEFT JOIN brief_push_texts p ON p.brief_id = b.id
                WHERE d.status IN ('pending', 'failed')
                ORDER BY d.updated_at, b.id"""
         ).fetchall()

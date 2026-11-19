@@ -96,6 +96,69 @@ def render_markdown(
     return "\n".join(lines)
 
 
+def render_push_summary(
+    results: list[MatchResult],
+    run_date: str,
+    owner_email: str = "",
+    business_date: date | None = None,
+) -> str:
+    """手机推送专用的短摘要：一屏读完，点标题可跳原文。
+
+    完整简报（含逐条匹配理由与风险）仍在 out/ 目录的 HTML 里；
+    微信只需要「今天有几个能投、最急的是哪个、链接在哪」。
+    """
+    current_date = business_date or _date_from_run_date(run_date)
+    display_date = current_date.isoformat()
+    recommended = [r for r in results if r.recommended]
+    recommended.sort(key=lambda r: (r.notice.registration_deadline or date.max, -r.score))
+
+    urgent = sum(
+        1
+        for r in recommended
+        if r.notice.registration_deadline is not None
+        and 0 <= (r.notice.registration_deadline - current_date).days <= 3
+    )
+
+    lines = [
+        f"**招投标机会日报 · {display_date}**",
+        "",
+        f"今日可投 **{len(recommended)}** 个 | 3 天内截止 **{urgent}** 个",
+        "",
+    ]
+
+    if not recommended:
+        lines += [
+            "今日暂无新增的符合推荐阈值项目。",
+            "",
+            "（只读监测，投标决策请人工确认）",
+        ]
+        return "\n".join(lines)
+
+    for idx, r in enumerate(recommended, 1):
+        n = r.notice
+        amount = (
+            f"{n.budget_amount / 10000:.0f}万"
+            if (n.budget_amount is not None and n.budget_amount > 0)
+            else "预算未披露"
+        )
+        deadline = n.registration_deadline
+        when = f"{deadline}（{days_countdown(deadline, current_date)}）" if deadline else "截止未披露"
+        title = " ".join((n.title or "").split())
+        lines += [
+            f"**{idx}. {title}**",
+            f"{r.score}分 · {n.region or '地区未披露'} · {amount}",
+            f"截止：{when}",
+            f"[查看原文]({n.source_url})",
+            "",
+        ]
+
+    lines += [
+        "---",
+        "（只读监测，不含报名/提交；投标决策请人工确认）",
+    ]
+    return "\n".join(lines)
+
+
 _HTML_STYLE = (
     "<style>"
     "body{font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;max-width:760px;"

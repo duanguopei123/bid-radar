@@ -246,12 +246,35 @@ def main_handler(event, context):
 
 - [x] 阶段 0：仓库初始化（GitHub: duanguopei123/bid-radar）
 - [x] 阶段 1：CodeBuddy 生成 MVP 初版（已由 bidding-monitor 目录并入本仓库 bid-radar）
-- [x] 阶段 2：代码审查把关（15 项测试全部通过，修复 8 处缺陷，见下方修复记录）
-- [x] 阶段 3：生态补强（企微通道、响应式邮件模板含倒计时配色、SCF 入口 `index.py` 已就绪；真实推送待填 webhook）
+- [x] 阶段 2：代码审查把关（**37 项测试全部通过**；先修 8 处缺陷，再按 TDD 修完「静默失败」整类问题，见下方记录）
+- [x] 阶段 3：生态补强（**微信推送 Server酱 / PushPlus 已接入**、响应式邮件模板含倒计时配色、SCF 入口 `index.py` 已就绪）
+- [x] 桌面设置软件：`配置工作台.bat`（换公司/换行业/配推送，见 `换公司-换行业操作指南.md`）
 - [ ] 阶段 4：人工验收
 
-**双击入口**：`启动工作台.bat`——自动跑当日流程（全量视图），并用浏览器打开最新简报。
+**双击入口**：
+
+| 文件 | 作用 |
+|---|---|
+| `配置工作台.bat` | 打开设置软件：改公司信息、配微信推送、设每天 9 点 |
+| `启动工作台.bat` | 立刻跑一次（全量视图）并用浏览器打开最新简报 |
+| `运行测试.bat` | 跑全部测试，结果同时写入 `test_output.txt` |
+| `每日推送.bat` | 静默运行，供 Windows 计划任务调用（无窗口、结果写 logs） |
+
 **项目位置**：`C:\Users\ZJ\WorkBuddy\2026-11-19-14-31-48\bid-radar`
+
+### 推送渠道（每日 9:00 到手机微信）
+
+| channel | 渠道 | 门槛 | 免费额度 |
+|---|---|---|---|
+| `none` | 不外发，只落盘 | 无 | — |
+| `serverchan` | 微信 · Server酱 | 扫码登录，无需实名 | 5 条/天 |
+| `pushplus` | 微信 · PushPlus | 扫码 + 实名 | 200 条/天 |
+| `wecom_webhook` | 企业微信群机器人 | 需企业微信 | 无限 |
+
+Token 只存 `.env`（`SERVERCHAN_SENDKEY` / `PUSHPLUS_TOKEN` / `WECOM_WEBHOOK_URL`），
+`config.yaml` 里只有 `${VAR:-}` 占位符，任何时候都不出现明文。
+推送内容是手机端短摘要（`render_push_summary`）：日期 + 可投数量 + 每条项目一行 + 原文链接；
+完整简报仍在 `out/` 的 HTML 里。
 
 ### 阶段 2 审查修复记录（8 处）
 
@@ -267,3 +290,22 @@ def main_handler(event, context):
 | 8 | 第二次运行必出空简报，双击入口像坏了 | 新增 `--all` 全量视图，双击默认使用 |
 
 配套新增 `tests/test_rules_edge.py`（6 个回归测试），总计 15 项测试。
+
+### 阶段 2（第二轮）静默失败类修复记录（11 处，TDD 驱动）
+
+先写 11 个必然失败的测试（`tests/test_runtime_safety.py`），再改代码让它们转绿，共 27 项。
+之后新增 10 个推送通道测试（`tests/test_notifier_channels.py`），总计 **37 项**。
+
+| 问题 | 后果 | 修复 |
+|---|---|---|
+| 评分异常被吞，公告被标记为已处理 | 该公告永久不再重试 | `notice_processing` 状态表 + 每日重试 pending/failed |
+| 推送失败后不补发 | 当天简报永久丢失 | `brief_deliveries` 状态机，失败保留待重试 |
+| 单条公告异常中断整批 | 当天其余公告全丢 | 单条 try/except 隔离，计入 `failed` 继续 |
+| 业务日期取两次 | 午夜跨天时 run_id 与 run_date 不一致 | run() 开头只取一次 `business_date` 并向下传递 |
+| Adapter 名字拼错静默回退 Mock | 看到假数据却毫无提示 | 抛带名称的 `ValueError` |
+| `--config` 参数被忽略 | 指定配置文件不生效 | 透传给 `load_config()` |
+| SCF 把去重库放 `/tmp` | 冷启动丢状态，天天重复推 | 必须显式提供 `BID_RADAR_DB_PATH` |
+| 调度器重试耗尽静默 return | APScheduler 以为成功，实际连续失败 | 重新抛出最后一次异常 |
+| 入口失败仍返回 0 | 计划任务看不出失败 | `run_once.py` / `index.py` 返回非零 |
+| 过期项目仍被推荐 | 推的是投不了的项目 | 只翻转 `recommended`，分数与维度不变 |
+| bat 失败时打开旧简报 | 误以为今天有结果 | 失败即停、`pause`、不打开旧简报 |

@@ -8,10 +8,11 @@ app:
   out_dir: "out"
   log_dir: "logs"
 
-# 定时调度：每天 08:30（可配置 cron 表达式）
+# 定时调度：每天 09:00（cron 表达式可配置）
+# 说明：本机运行要求电脑在 9 点前已开机且未休眠；长期稳定建议后续迁到云函数。
 schedule:
-  cron_hour: 8
-  cron_minute: 30
+  cron_hour: 9
+  cron_minute: 0
   retry:
     max_attempts: 3
     backoff_seconds: 5
@@ -76,12 +77,18 @@ llm:
   timeout_seconds: 30
   # api_key 为空时自动降级为模板生成，保证离线 / run-once 可跑通
 
-# 通知器：企业微信机器人 webhook（密钥走 .env）
+# 通知器：推送到手机微信（token 全部走 .env，禁止在此硬编码）
+# channel 可选值：none / serverchan / pushplus / wecom_webhook
+#   serverchan —— Server酱，微信扫码登录即用，免费 5 条/天，无需实名（推荐）
+#   pushplus   —— PushPlus，需实名认证，实名后 200 条/天
+#   wecom_webhook —— 企业微信群机器人（消息到企业微信 App，非个人微信）
+# channel=none 或 token 为空时只落盘简报、不实际外发（最安全默认）
 notifier:
-  type: "wecom_webhook"
+  channel: "${NOTIFIER_CHANNEL:-none}"
   enabled: true
+  serverchan_sendkey: "${SERVERCHAN_SENDKEY:-}"
+  pushplus_token: "${PUSHPLUS_TOKEN:-}"
   webhook_url: "${WECOM_WEBHOOK_URL:-}"
-  # webhook_url 为空时只落盘简报、不实际外发（run-once 默认行为）
 
 # 邮件负责人（本阶段仅作为简报署名/收件人元信息，推送走企微机器人）
 owner_email: "703806798@qq.com"

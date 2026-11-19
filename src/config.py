@@ -58,4 +58,18 @@ def load_config(path: Path | None = None) -> dict[str, Any]:
         else:
             app[key] = str(p)
 
+    # 公司画像可由桌面设置软件单独维护到 company.yaml，覆盖 config.yaml 中的 company 段。
+    # 这样用户换公司/换行业时只改一个干净的配置文件，不需要看懂带注释的 config.yaml。
+    company_file = cfg.get("company_file") or "company.yaml"
+    company_path = Path(company_file)
+    if not company_path.is_absolute():
+        company_path = ROOT / company_path
+    if company_path.exists():
+        with open(company_path, "r", encoding="utf-8") as f:
+            override = yaml.safe_load(f) or {}
+        if isinstance(override, dict) and override:
+            merged = dict(cfg.get("company") or {})
+            merged.update(override)
+            cfg["company"] = merged
+
     return cfg

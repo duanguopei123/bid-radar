@@ -34,3 +34,6 @@ test_output.txt
 data/*.bak
 data/*.db-wal
 data/*.db-shm
+
+# 每日运行日志
+logs/

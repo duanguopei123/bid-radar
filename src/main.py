@@ -14,7 +14,7 @@ from pathlib import Path
 from .adapters.base import DataSourceAdapter
 from .adapters.mock_adapter import MockAdapter
 from .config import load_config
-from .notifier.wecom_notifier import WecomWebhookNotifier
+from .notifier.factory import build_notifier
 from .pipeline import Pipeline
 from .storage.db import Database
 
@@ -35,8 +35,7 @@ def build_adapter(cfg: dict) -> DataSourceAdapter:
 def build_pipeline(cfg: dict) -> Pipeline:
     db = Database(cfg["app"]["db_path"])
     adapter = build_adapter(cfg)
-    ncfg = cfg.get("notifier", {})
-    notifier = WecomWebhookNotifier(ncfg.get("webhook_url", ""), db=db)
+    notifier = build_notifier(cfg, db=db)
     return Pipeline(cfg, adapter, db, notifier)
 
 
