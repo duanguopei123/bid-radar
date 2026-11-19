@@ -246,7 +246,7 @@ def main_handler(event, context):
 
 - [x] 阶段 0：仓库初始化（GitHub: duanguopei123/bid-radar）
 - [x] 阶段 1：CodeBuddy 生成 MVP 初版（已由 bidding-monitor 目录并入本仓库 bid-radar）
-- [x] 阶段 2：代码审查把关（**37 项测试全部通过**；先修 8 处缺陷，再按 TDD 修完「静默失败」整类问题，见下方记录）
+- [x] 阶段 2：代码审查把关（**47 项测试全部通过**；先修 8 处缺陷，再按 TDD 修完「静默失败」整类问题，见下方记录）
 - [x] 阶段 3：生态补强（**微信推送 Server酱 / PushPlus 已接入**、响应式邮件模板含倒计时配色、SCF 入口 `index.py` 已就绪）
 - [x] 桌面设置软件：`配置工作台.bat`（换公司/换行业/配推送，见 `换公司-换行业操作指南.md`）
 - [ ] 阶段 4：人工验收
@@ -257,6 +257,7 @@ def main_handler(event, context):
 |---|---|
 | `配置工作台.bat` | 打开设置软件：改公司信息、配微信推送、设每天 9 点 |
 | `启动工作台.bat` | 立刻跑一次（全量视图）并用浏览器打开最新简报 |
+| `自检.bat` | 一次查完环境/公司信息/推送渠道/定时任务/最近运行，告诉你哪里没配好 |
 | `运行测试.bat` | 跑全部测试，结果同时写入 `test_output.txt` |
 | `每日推送.bat` | 静默运行，供 Windows 计划任务调用（无窗口、结果写 logs） |
 
@@ -294,7 +295,7 @@ Token 只存 `.env`（`SERVERCHAN_SENDKEY` / `PUSHPLUS_TOKEN` / `WECOM_WEBHOOK_U
 ### 阶段 2（第二轮）静默失败类修复记录（11 处，TDD 驱动）
 
 先写 11 个必然失败的测试（`tests/test_runtime_safety.py`），再改代码让它们转绿，共 27 项。
-之后新增 10 个推送通道测试（`tests/test_notifier_channels.py`），总计 **37 项**。
+之后新增 10 个推送通道测试（`tests/test_notifier_channels.py`）；再加 7 个时间展示测试与 3 个自检测试，总计 **47 项**。
 
 | 问题 | 后果 | 修复 |
 |---|---|---|

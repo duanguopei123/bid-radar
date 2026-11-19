@@ -154,8 +154,11 @@ class Pipeline:
 
         run_date = business_date.isoformat()
         owner = self.cfg.get("owner_email", "")
-        md = render_markdown(results, run_date, owner, business_date=business_date)
-        html = render_html(results, run_date, owner, business_date=business_date)
+        display_tz = (self.cfg.get("app") or {}).get("timezone") or None
+        md = render_markdown(results, run_date, owner, business_date=business_date,
+                             display_tz=display_tz)
+        html = render_html(results, run_date, owner, business_date=business_date,
+                           display_tz=display_tz)
         push_text = render_push_summary(results, run_date, owner, business_date=business_date)
 
         out_dir = Path(self.cfg["app"]["out_dir"])

@@ -5,10 +5,39 @@
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from html import escape
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .models import MatchResult
+
+# 简报里一切时间都按这个时区展示：带时区的时间先换算，裸时间视为已经是本地时间
+DEFAULT_DISPLAY_TZ = "Asia/Shanghai"
+
+
+def _resolve_tz(name: str | None):
+    try:
+        return ZoneInfo(name or DEFAULT_DISPLAY_TZ)
+    except (ZoneInfoNotFoundError, ValueError):
+        return None
+
+
+def fmt_dt(value: datetime | None, tz_name: str | None = None) -> str:
+    """把时间统一成「YYYY-MM-DD HH:MM」，不向外暴露 +00:00 这类原始偏移。
+
+    - 带时区：换算到 tz_name（默认北京时间）后格式化
+    - 不带时区：视为已是本地时间，原样格式化
+    - 空值：返回「未披露」，与其它字段的空值写法一致
+    """
+    if value is None:
+        return "未披露"
+    if not isinstance(value, datetime):
+        return str(value)
+    if value.tzinfo is not None:
+        tz = _resolve_tz(tz_name)
+        if tz is not None:
+            value = value.astimezone(tz)
+    return value.strftime("%Y-%m-%d %H:%M")
 
 
 def days_countdown(d: date | None, business_date: date | None = None) -> str:
@@ -43,6 +72,7 @@ def render_markdown(
     run_date: str,
     owner_email: str,
     business_date: date | None = None,
+    display_tz: str | None = None,
 ) -> str:
     current_date = business_date or _date_from_run_date(run_date)
     display_date = current_date.isoformat()
@@ -70,7 +100,7 @@ def render_markdown(
             f"- **匹配分**：{r.score}/100　|　**地区**：{n.region}　|　**预算**：{amount}",
             f"- **报名截止**：{n.registration_deadline or '未披露'}"
             f"（{days_countdown(n.registration_deadline, current_date)}）"
-            f"　|　**开标**：{n.bid_open_time or '未披露'}",
+            f"　|　**开标**：{fmt_dt(n.bid_open_time, display_tz)}",
             f"- **采购人**：{n.purchaser}",
             "",
             "**3 行摘要**",
@@ -88,7 +118,7 @@ def render_markdown(
             "",
             f"**原文链接**：{n.source_url}",
             "",
-            f"<!-- 来源：{n.source} | 抓取时间：{n.fetched_at.isoformat()} | 公告ID：{n.notice_id} -->",
+            f"<!-- 来源：{n.source} | 抓取时间：{fmt_dt(n.fetched_at, display_tz)} | 公告ID：{n.notice_id} -->",
             "",
             "---",
             "",
@@ -191,6 +221,7 @@ def render_html(
     run_date: str,
     owner_email: str,
     business_date: date | None = None,
+    display_tz: str | None = None,
 ) -> str:
     current_date = business_date or _date_from_run_date(run_date)
     display_date = current_date.isoformat()
@@ -231,7 +262,7 @@ def render_html(
             f"<p class='field'>报名截止：{esc(str(n.registration_deadline or '未披露'))}"
             f"　<span class='countdown {_countdown_class(n.registration_deadline, current_date)}'>"
             f"（{days_countdown(n.registration_deadline, current_date)}）</span>"
-            f"　|　开标：{esc(str(n.bid_open_time or '未披露'))}</p>"
+            f"　|　开标：{esc(fmt_dt(n.bid_open_time, display_tz))}</p>"
             f"<p class='field'>采购人：{esc(n.purchaser)}</p>"
         )
         parts.append("<p class='summary'>" + esc(r.summary).replace("\n", "<br>") + "</p>")
@@ -241,7 +272,7 @@ def render_html(
         parts.append(
             f"<p class='meta'><a href='{esc(n.source_url)}'>查看原文公告</a>"
             f"　<span class='foot' style='text-align:left;margin:0'>来源 {esc(n.source)}"
-            f" · 抓取 {esc(n.fetched_at.isoformat())}</span></p>"
+            f" · 抓取 {esc(fmt_dt(n.fetched_at, display_tz))}</span></p>"
         )
         parts.append("</div>")
 

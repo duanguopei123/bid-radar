@@ -46,11 +46,15 @@ C:\Users\ZJ\WorkBuddy\2026-11-19-14-31-48\bid-radar\.venv\Scripts\python.exe
 
 ## 当前基线
 
-- HEAD 提交：`7b22a34`
-- 测试数量：**15 个，全部通过**（0.2 秒内跑完）
-- 测试文件：`tests/test_scorer.py`（9 个）、`tests/test_rules_edge.py`（6 个回归测试）
+- 测试数量：**47 个，全部通过**（1 秒内跑完）
+- 测试文件：
+  - `tests/test_scorer.py`（7）、`tests/test_rules_edge.py`（6）、`tests/test_mock_adapter.py`（2）—— 打分、规则、数据源契约
+  - `tests/test_runtime_safety.py`（12）—— 静默失败类回归（状态机、重试、日期基准、入口退出码）
+  - `tests/test_notifier_channels.py`（10）—— 推送通道路由与失败处理
+  - `tests/test_brief_timezone.py`（7）—— 简报时间必须按本地时区展示，不得出现 `+00:00`
+  - `tests/test_selfcheck.py`（3）—— 自检脚本不许崩、不许泄漏 Token
 
-**任何人不许让测试数量减少。** 改了代码后测试数必须是 15 + 新增数。
+**任何人不许让测试数量减少。** 改了代码后测试总数只能增加。
 
 ## 硬性约束
 
@@ -79,8 +83,10 @@ src/
     base.py            # 适配器接口
 tests/                 # pytest 用例
 run_once.py            # 本地跑一次
+selfcheck.py           # 自检：环境/配置/推送/定时/最近运行（只读，不发请求）
 index.py               # 腾讯云函数定时入口
 启动工作台.bat          # Windows 双击运行（已改用 .venv）
+自检.bat                # 双击跑 selfcheck.py
 ```
 
 ## 业务背景（判断问题时需要）
