@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import copy
 import re
+import sqlite3
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -130,18 +131,109 @@ def test_failed_push_stays_pending_and_is_retried(tmp_path):
     db.close()
 
 
-def test_expired_blocks_recommendation_without_changing_score(tmp_path):
+def test_legacy_backfill_uses_matches_and_is_idempotent(tmp_path):
+    db_path = tmp_path / "legacy.db"
+    legacy = sqlite3.connect(db_path)
+    legacy.executescript(
+        (ROOT / "migrations" / "001_init.sql").read_text(encoding="utf-8")
+    )
+    insert_notice = """
+        INSERT INTO notices
+        (notice_id, source, identity_hash, content_hash, title, purchaser, region,
+         budget_amount, registration_deadline, bid_open_time, qualification,
+         source_url, publish_time, fetched_at, raw_snapshot, change_type,
+         first_seen_at, last_seen_at)
+        VALUES (?, 'legacy', ?, ?, ?, '历史采购人', '江苏徐州', 300000,
+                NULL, NULL, '道路运输经营许可证', ?, '2026-11-01',
+                '2026-11-01T00:00:00+00:00', '{}', 'new',
+                '2026-11-01T00:00:00+00:00', '2026-11-01T00:00:00+00:00')
+    """
+    matched_pk = legacy.execute(
+        insert_notice,
+        (
+            "legacy-matched",
+            "identity-matched",
+            "content-matched",
+            "历史已匹配项目",
+            "https://example.org/legacy-matched",
+        ),
+    ).lastrowid
+    legacy.execute(
+        insert_notice,
+        (
+            "legacy-pending",
+            "identity-pending",
+            "content-pending",
+            "历史未匹配项目",
+            "https://example.org/legacy-pending",
+        ),
+    )
+    legacy.execute(
+        """INSERT INTO matches
+           (notice_pk, score, dimensions_json, reasons_json, risks_json,
+            summary, recommended, computed_at)
+           VALUES (?, 90, '[]', '[]', '[]', '历史摘要', 1,
+                   '2026-11-02T00:00:00+00:00')""",
+        (matched_pk,),
+    )
+    legacy.commit()
+    legacy.close()
+
+    db = Database(str(db_path))
+    first = {
+        row["notice_id"]: (row["status"], row["completed_at"], row["updated_at"])
+        for row in db.conn.execute(
+            """SELECT n.notice_id, p.status, p.completed_at, p.updated_at
+               FROM notices n
+               JOIN notice_processing p ON p.notice_pk = n.id"""
+        )
+    }
+    assert first["legacy-matched"][0] == "matched"
+    assert first["legacy-matched"][1] is not None
+    assert first["legacy-pending"][0] == "pending"
+    assert first["legacy-pending"][1] is None
+    db.close()
+
+    reopened = Database(str(db_path))
+    second = {
+        row["notice_id"]: (row["status"], row["completed_at"], row["updated_at"])
+        for row in reopened.conn.execute(
+            """SELECT n.notice_id, p.status, p.completed_at, p.updated_at
+               FROM notices n
+               JOIN notice_processing p ON p.notice_pk = n.id"""
+        )
+    }
+    assert second == first
+    reopened.close()
+
+
+def test_expired_only_flips_recommendation_without_changing_score_or_dimensions(
+    tmp_path,
+    monkeypatch,
+):
     cfg = _cfg(tmp_path)
+    active = _notice(
+        "active-1",
+        deadline=BUSINESS_DATE + timedelta(days=1),
+    )
     expired = _notice(
         "expired-1",
         deadline=BUSINESS_DATE - timedelta(days=1),
     )
 
-    result = score_notice(expired, cfg, business_date=BUSINESS_DATE)
+    # 固定 deadline 维度的返回值，使测试只验证过期门禁是否改动既有分数。
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            "src.matcher.rules.deadline_score",
+            lambda deadline, business_date=None: (0.73, "截止信息已披露", ""),
+        )
+        active_result = score_notice(active, cfg, business_date=BUSINESS_DATE)
+        expired_result = score_notice(expired, cfg, business_date=BUSINESS_DATE)
 
-    assert result.score > int(cfg["matching"]["recommend_threshold"])
-    assert result.recommended is False
-    assert next(d for d in result.dimensions if d.name == "deadline").score == 0.0
+    assert active_result.recommended is True
+    assert expired_result.recommended is False
+    assert expired_result.score == active_result.score
+    assert expired_result.dimensions == active_result.dimensions
 
     unknown = _notice("unknown-deadline-1", deadline=None)
     unknown_result = score_notice(unknown, cfg, business_date=BUSINESS_DATE)
@@ -261,6 +353,8 @@ def test_launcher_uses_only_venv_and_stops_before_opening_stale_brief():
     assert r".venv\Scripts\python.exe" in script
     assert "AppData" not in script
     assert not re.search(r'set\s+"PY=python"', script, flags=re.IGNORECASE)
+    assert "未找到 .venv" in script
+    assert "请重新创建虚拟环境" in script
 
     error_index = script.lower().find("if errorlevel 1")
     open_index = script.lower().find("opening latest brief")

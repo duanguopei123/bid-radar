@@ -67,3 +67,38 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     message     TEXT    NOT NULL,
     detail_json TEXT    NOT NULL DEFAULT '{}'
 );
+
+-- 只记录当前内容版本的处理状态，历史版本状态不保留。
+-- 匹配失败不会生成 brief，因此不能把该状态放在 briefs 上。
+CREATE TABLE IF NOT EXISTS notice_processing (
+    notice_pk           INTEGER PRIMARY KEY REFERENCES notices(id),
+    content_hash        TEXT    NOT NULL,
+    status              TEXT    NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending', 'matched', 'failed')),
+    attempts            INTEGER NOT NULL DEFAULT 0,
+    last_error          TEXT,
+    started_at          TEXT,
+    completed_at        TEXT,
+    updated_at          TEXT    NOT NULL
+);
+
+-- 待处理/失败公告的查询：WHERE status IN ('pending', 'failed') ORDER BY updated_at
+CREATE INDEX IF NOT EXISTS idx_notice_processing_retry
+    ON notice_processing(status, updated_at);
+
+-- 简报投递状态：一条 brief 可能多次投递失败并重试，独立于匹配结果。
+CREATE TABLE IF NOT EXISTS brief_deliveries (
+    brief_id            INTEGER PRIMARY KEY REFERENCES briefs(id),
+    status              TEXT    NOT NULL DEFAULT 'pending'
+                        CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'skipped')),
+    attempts            INTEGER NOT NULL DEFAULT 0,
+    last_error          TEXT,
+    queued_at           TEXT    NOT NULL,
+    last_attempt_at     TEXT,
+    sent_at             TEXT,
+    updated_at          TEXT    NOT NULL
+);
+
+-- 待投递简报的查询：WHERE status IN ('pending', 'failed') ORDER BY updated_at
+CREATE INDEX IF NOT EXISTS idx_brief_deliveries_retry
+    ON brief_deliveries(status, updated_at);
