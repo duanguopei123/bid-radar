@@ -1,0 +1,87 @@
+# 招投标机会监测工作台 - 主配置
+# 所有敏感信息（密钥/token）只放 .env，禁止在此硬编码。
+
+app:
+  timezone: "Asia/Shanghai"
+  data_dir: "data"
+  db_path: "data/bidding.db"
+  out_dir: "out"
+  log_dir: "logs"
+
+# 定时调度：每天 08:30（可配置 cron 表达式）
+schedule:
+  cron_hour: 8
+  cron_minute: 30
+  retry:
+    max_attempts: 3
+    backoff_seconds: 5
+
+# 公司结构化画像（也可拆到 company.yaml，此处内嵌便于起步）
+company:
+  name: "徐州示例运输有限公司"
+  qualifications:
+    - code: "road_transport_license"
+      name: "道路运输经营许可证"
+      level: "普通货运"
+  regions:
+    - "徐州"
+    - "江苏省"
+  industry_keywords:
+    - "运输"
+    - "物流"
+  budget:
+    min: 10000        # 1 万
+    max: 1000000      # 100 万
+  # 软性过滤：区间外扣分并给出风险提示，但保留在简报中
+  budget_soft_filter: true
+
+# 打分权重（五维，总分 100），可在 .env 无需改代码地微调
+matching:
+  weights:
+    region: 25
+    industry: 25
+    qualification: 20
+    budget: 15
+    deadline: 15
+  recommend_threshold: 55   # >= 该分数进入推荐简报
+
+# 数据源开关；MVP 只启用 mock
+datasources:
+  - name: "mock"
+    type: "mock"
+    enabled: true
+  - name: "ccgp"
+    type: "government_procurement"
+    enabled: false
+    note: "中国政府采购网 ccgp.gov.cn，需核验 robots/服务条款后实现"
+  - name: "ggzy_js"
+    type: "public_resource"
+    enabled: false
+    note: "江苏/徐州公共资源交易平台，区域匹配度最高"
+  - name: "cebpubservice"
+    type: "public_bidding"
+    enabled: false
+    note: "中国招标投标公共服务平台 cebpubservice.com"
+
+# 数据源适配器（当前使用 mock）
+active_adapter: "mock"
+
+# LLM（OpenAI 兼容协议）。model/base_url/api_key 均从 .env 读取。
+llm:
+  provider: "openai_compatible"
+  enabled: true
+  model: "${LLM_MODEL:-gpt-4o-mini}"
+  base_url: "${LLM_BASE_URL:-https://api.openai.com/v1}"
+  api_key: "${LLM_API_KEY:-}"
+  timeout_seconds: 30
+  # api_key 为空时自动降级为模板生成，保证离线 / run-once 可跑通
+
+# 通知器：企业微信机器人 webhook（密钥走 .env）
+notifier:
+  type: "wecom_webhook"
+  enabled: true
+  webhook_url: "${WECOM_WEBHOOK_URL:-}"
+  # webhook_url 为空时只落盘简报、不实际外发（run-once 默认行为）
+
+# 邮件负责人（本阶段仅作为简报署名/收件人元信息，推送走企微机器人）
+owner_email: "703806798@qq.com"

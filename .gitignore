@@ -17,6 +17,7 @@ build/
 data/*.db
 logs/
 *.log
+out/
 
 # 系统杂项
 .DS_Store
