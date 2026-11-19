@@ -52,6 +52,7 @@ bid-radar/
 ├── config.yaml                  # 公司画像、权重、调度、数据源、LLM/通知器开关
 ├── requirements.txt             # 依赖清单
 ├── run_once.py                  # ★ run-once 命令：一条命令跑通全流程
+├── index.py                     # 腾讯云 SCF 定时触发入口
 ├── migrations/001_init.sql      # 初始建表迁移脚本
 ├── src/
 │   ├── main.py                  # CLI 入口与组件装配
@@ -246,7 +247,7 @@ def main_handler(event, context):
 - [x] 阶段 0：仓库初始化（GitHub: duanguopei123/bid-radar）
 - [x] 阶段 1：CodeBuddy 生成 MVP 初版（已由 bidding-monitor 目录并入本仓库 bid-radar）
 - [x] 阶段 2：代码审查把关（15 项测试全部通过，修复 8 处缺陷，见下方修复记录）
-- [ ] 阶段 3：CodeBuddy 补生态
+- [x] 阶段 3：生态补强（企微通道、响应式邮件模板含倒计时配色、SCF 入口 `index.py` 已就绪；真实推送待填 webhook）
 - [ ] 阶段 4：人工验收
 
 **双击入口**：`启动工作台.bat`——自动跑当日流程（全量视图），并用浏览器打开最新简报。
