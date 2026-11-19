@@ -22,3 +22,6 @@ out/
 # 系统杂项
 .DS_Store
 Thumbs.db
+
+# 审查导出文件
+review_diff.txt
