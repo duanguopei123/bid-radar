@@ -29,3 +29,8 @@ review_diff.txt
 # 测试与审查输出
 test_output.txt
 第一批-红证据.txt
+
+# 数据库备份
+data/*.bak
+data/*.db-wal
+data/*.db-shm

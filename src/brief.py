@@ -11,10 +11,10 @@ from html import escape
 from .models import MatchResult
 
 
-def days_countdown(d: date | None) -> str:
+def days_countdown(d: date | None, business_date: date | None = None) -> str:
     if d is None:
         return "截止日未披露"
-    delta = (d - date.today()).days
+    delta = (d - (business_date or date.today())).days
     if delta < 0:
         return f"已截止 {abs(delta)} 天"
     if delta == 0:
@@ -22,11 +22,11 @@ def days_countdown(d: date | None) -> str:
     return f"剩余 {delta} 天"
 
 
-def _countdown_class(d: date | None) -> str:
+def _countdown_class(d: date | None, business_date: date | None = None) -> str:
     """倒计时颜色：3 天内/已截止=红，7 天内=黄，其余=绿。"""
     if d is None:
         return "c-normal"
-    delta = (d - date.today()).days
+    delta = (d - (business_date or date.today())).days
     if delta <= 3:
         return "c-urgent"
     if delta <= 7:
@@ -38,11 +38,18 @@ def _change_label(change_type: str) -> str:
     return {"updated": "更新", "unchanged": "在库"}.get(change_type, "新增")
 
 
-def render_markdown(results: list[MatchResult], run_date: str, owner_email: str) -> str:
+def render_markdown(
+    results: list[MatchResult],
+    run_date: str,
+    owner_email: str,
+    business_date: date | None = None,
+) -> str:
+    current_date = business_date or _date_from_run_date(run_date)
+    display_date = current_date.isoformat()
     recommended = [r for r in results if r.recommended]
     recommended.sort(key=lambda r: r.score, reverse=True)
     lines = [
-        f"# 招投标机会日报 · {run_date}",
+        f"# 招投标机会日报 · {display_date}",
         "",
         f"> 收件/负责人：{owner_email}　|　今日新增 {len(recommended)} 个可投项目",
         "> 本简报由只读监测系统生成，不含任何报名/提交动作；投标决策请人工确认。",
@@ -61,7 +68,8 @@ def render_markdown(results: list[MatchResult], run_date: str, owner_email: str)
             f"## {idx}. [{_change_label(r.change_type)}] {n.title}",
             "",
             f"- **匹配分**：{r.score}/100　|　**地区**：{n.region}　|　**预算**：{amount}",
-            f"- **报名截止**：{n.registration_deadline or '未披露'}（{days_countdown(n.registration_deadline)}）"
+            f"- **报名截止**：{n.registration_deadline or '未披露'}"
+            f"（{days_countdown(n.registration_deadline, current_date)}）"
             f"　|　**开标**：{n.bid_open_time or '未披露'}",
             f"- **采购人**：{n.purchaser}",
             "",
@@ -115,13 +123,20 @@ _HTML_STYLE = (
 )
 
 
-def render_html(results: list[MatchResult], run_date: str, owner_email: str) -> str:
+def render_html(
+    results: list[MatchResult],
+    run_date: str,
+    owner_email: str,
+    business_date: date | None = None,
+) -> str:
+    current_date = business_date or _date_from_run_date(run_date)
+    display_date = current_date.isoformat()
     recommended = [r for r in results if r.recommended]
     recommended.sort(key=lambda r: r.score, reverse=True)
     esc = escape
     urgent = sum(1 for r in recommended
                  if r.notice.registration_deadline
-                 and (r.notice.registration_deadline - date.today()).days <= 3)
+                 and (r.notice.registration_deadline - current_date).days <= 3)
     total = len(recommended)
 
     parts = [
@@ -129,7 +144,7 @@ def render_html(results: list[MatchResult], run_date: str, owner_email: str) -> 
         "<meta name='viewport' content='width=device-width,initial-scale=1'>",
         _HTML_STYLE,
         "</head><body>",
-        f"<h1>招投标机会日报 · {esc(run_date)}</h1>",
+        f"<h1>招投标机会日报 · {esc(display_date)}</h1>",
         f"<p class='sub'>负责人：{esc(owner_email)}</p>",
         f"<div class='stat'>本次可投 <b>{total}</b> 个　|　"
         f"3 天内截止 <b class='c-urgent'>{urgent}</b> 个　|　"
@@ -151,8 +166,8 @@ def render_html(results: list[MatchResult], run_date: str, owner_email: str) -> 
             f"<p class='meta'>匹配分 <span class='score'>{r.score}</span>/100"
             f"　|　地区：{esc(n.region)}　|　预算：{amount}</p>"
             f"<p class='field'>报名截止：{esc(str(n.registration_deadline or '未披露'))}"
-            f"　<span class='countdown {_countdown_class(n.registration_deadline)}'>"
-            f"（{days_countdown(n.registration_deadline)}）</span>"
+            f"　<span class='countdown {_countdown_class(n.registration_deadline, current_date)}'>"
+            f"（{days_countdown(n.registration_deadline, current_date)}）</span>"
             f"　|　开标：{esc(str(n.bid_open_time or '未披露'))}</p>"
             f"<p class='field'>采购人：{esc(n.purchaser)}</p>"
         )
@@ -170,3 +185,10 @@ def render_html(results: list[MatchResult], run_date: str, owner_email: str) -> 
     parts.append("<p class='foot'>本简报由只读监测系统生成，不含报名/提交动作</p>")
     parts.append("</body></html>")
     return "".join(parts)
+
+
+def _date_from_run_date(run_date: str) -> date:
+    try:
+        return date.fromisoformat(run_date)
+    except ValueError:
+        return date.today()

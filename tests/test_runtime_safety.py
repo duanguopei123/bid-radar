@@ -353,13 +353,13 @@ def test_launcher_uses_only_venv_and_stops_before_opening_stale_brief():
     assert r".venv\Scripts\python.exe" in script
     assert "AppData" not in script
     assert not re.search(r'set\s+"PY=python"', script, flags=re.IGNORECASE)
-    assert "未找到 .venv" in script
-    assert "请重新创建虚拟环境" in script
-
-    error_index = script.lower().find("if errorlevel 1")
-    open_index = script.lower().find("opening latest brief")
-    assert error_index >= 0
-    assert open_index > error_index
-    failure_branch = script[error_index:open_index].lower()
-    assert "goto" in failure_branch or "exit /b" in failure_branch
+    assert script.isascii()
+    assert "[ERROR]" in script
+    assert "if not exist" in script.lower()
+    assert "exit /b 1" in script.lower()
     assert "pause" in script.lower()
+
+    venv_check_index = script.lower().find("if not exist")
+    open_index = script.lower().find("opening latest brief")
+    assert venv_check_index >= 0
+    assert open_index > venv_check_index

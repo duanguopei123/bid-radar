@@ -94,14 +94,15 @@ def budget_score(amount: float | None, budget_cfg: dict) -> tuple[float, str, st
     return 0.3, f"预算超出目标上限：{amount / 10000:.1f} 万元", "超出目标预算区间，需评估履约能力"
 
 
-def deadline_score(deadline) -> tuple[float, str, str]:
+def deadline_score(deadline, business_date=None) -> tuple[float, str, str]:
     """截止时间维度：未过期按紧迫度给分；已过期 0 分并提示。"""
     from datetime import date
 
     if deadline is None:
         return 0.5, "报名截止时间未披露", "截止时间未知，需人工核实"
 
-    days = (deadline - date.today()).days
+    today = business_date or date.today()
+    days = (deadline - today).days
     if days < 0:
         return 0.0, f"报名已截止（{-days} 天前）", "已过报名截止时间，不可投"
     if days <= 3:

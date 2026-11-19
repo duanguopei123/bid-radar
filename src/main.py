@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 
 from .adapters.base import DataSourceAdapter
 from .adapters.mock_adapter import MockAdapter
@@ -22,12 +23,13 @@ def build_adapter(cfg: dict) -> DataSourceAdapter:
     """根据配置选择适配器。新增真实源时在此注册即可，主流程无需改动。"""
     active = cfg.get("active_adapter", "mock")
     for ds in cfg.get("datasources", []):
-        if ds.get("name") == active and ds.get("enabled", False):
+        if ds.get("name") == active:
+            if not ds.get("enabled", False):
+                raise ValueError(f"数据源 {active} 未启用")
             if ds.get("type") == "mock":
                 return MockAdapter(ds)
-            # 真实源适配器在后续阶段实现并在上方注册；未启用时不应到达此处。
-    # 兜底使用 mock，保证系统永远可运行（只读、离线）
-    return MockAdapter({})
+            raise ValueError(f"数据源 {active} 的类型 {ds.get('type')!r} 尚未注册")
+    raise ValueError(f"找不到数据源 {active}")
 
 
 def build_pipeline(cfg: dict) -> Pipeline:
@@ -48,9 +50,24 @@ def cmd_run_once(cfg: dict, include_unchanged: bool = False) -> dict:
     return result
 
 
+def _result_failed(result: dict) -> bool:
+    return (
+        result.get("status") == "failed"
+        or result.get("delivery_status") == "failed"
+        or int(result.get("failed") or 0) > 0
+    )
+
+
 def cmd_schedule(cfg: dict) -> None:
     from .scheduler import start_scheduler
-    start_scheduler(cfg, runner=lambda: cmd_run_once(cfg))
+
+    def scheduled_run() -> dict:
+        result = cmd_run_once(cfg)
+        if _result_failed(result):
+            raise RuntimeError("定时任务处理或投递失败")
+        return result
+
+    start_scheduler(cfg, runner=scheduled_run)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -60,12 +77,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", help="指定 config.yaml 路径")
     args = parser.parse_args(argv)
 
-    cfg = load_config()
+    cfg = load_config(Path(args.config)) if args.config else load_config()
     if args.command == "run-once":
-        cmd_run_once(cfg)
+        result = cmd_run_once(cfg)
     else:
         cmd_schedule(cfg)
-    return 0
+        return 0
+    return 1 if _result_failed(result) else 0
 
 
 if __name__ == "__main__":

@@ -11,13 +11,27 @@ import sys
 from src.config import load_config
 from src.main import cmd_run_once
 
-if __name__ == "__main__":
-    include_all = "--all" in sys.argv[1:]
+
+def main(argv: list[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    include_all = "--all" in args
     cfg = load_config()
     result = cmd_run_once(cfg, include_unchanged=include_all)
     print("\n简报文件：")
-    print(" -", result["markdown"])
-    print(" -", result["html"])
-    if result["recommended"] == 0:
+    print(" -", result.get("markdown", ""))
+    print(" -", result.get("html", ""))
+    failed = (
+        result.get("status") == "failed"
+        or result.get("delivery_status") == "failed"
+        or int(result.get("failed") or 0) > 0
+    )
+    if failed:
+        print("\n[ERROR] pipeline failed or delivery failed; local brief was still written.")
+        return 1
+    if result.get("recommended", 0) == 0:
         print("\n提示：本次无新增推荐项目。加 --all 可查看当前全部可投项目。")
-    sys.exit(0)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

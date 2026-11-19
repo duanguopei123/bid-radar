@@ -11,21 +11,25 @@ from typing import Callable
 from .config import load_dotenv
 
 
-def _run_with_retry(runner: Callable[[], None], max_attempts: int, backoff: int, db=None) -> None:
+def _run_with_retry(runner: Callable[[], object], max_attempts: int, backoff: int, db=None) -> None:
+    last_exc: Exception | None = None
     for attempt in range(1, max_attempts + 1):
         try:
             runner()
             return
         except Exception as exc:  # noqa: BLE001 - 记录后重试
+            last_exc = exc
             if db:
                 db.audit("schedule", f"第 {attempt}/{max_attempts} 次运行失败：{exc}", level="WARN")
             else:
                 print(f"[WARN] 第 {attempt}/{max_attempts} 次运行失败：{exc}")
             if attempt < max_attempts:
                 time.sleep(backoff * attempt)
+    if last_exc is not None:
+        raise last_exc
 
 
-def start_scheduler(cfg: dict, runner: Callable[[], None]) -> None:
+def start_scheduler(cfg: dict, runner: Callable[[], object]) -> None:
     try:
         from apscheduler.schedulers.blocking import BlockingScheduler
         from apscheduler.triggers.cron import CronTrigger

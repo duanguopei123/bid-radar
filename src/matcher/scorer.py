@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 from ..models import DimensionScore, MatchResult, Notice
 from . import rules
@@ -12,10 +13,15 @@ from . import rules
 logger = logging.getLogger(__name__)
 
 
-def score_notice(notice: Notice, cfg: dict) -> MatchResult:
+def score_notice(
+    notice: Notice,
+    cfg: dict,
+    business_date: date | None = None,
+) -> MatchResult:
     company = cfg["company"]
     mcfg = cfg["matching"]
     weights = mcfg["weights"]
+    today = business_date or date.today()
 
     total_weight = sum(float(v) for v in weights.values())
     if abs(total_weight - 100) > 1:
@@ -44,7 +50,10 @@ def score_notice(notice: Notice, cfg: dict) -> MatchResult:
     r, reason, risk = rules.budget_score(notice.budget_amount, company.get("budget", {}))
     add("budget", r, reason, risk)
 
-    r, reason, risk = rules.deadline_score(notice.registration_deadline)
+    r, reason, risk = rules.deadline_score(
+        notice.registration_deadline,
+        business_date=today,
+    )
     add("deadline", r, reason, risk)
 
     total = round(sum(d.score for d in dims))
@@ -52,6 +61,8 @@ def score_notice(notice: Notice, cfg: dict) -> MatchResult:
     reasons = [f"[{d.name}] {d.reason}" for d in dims if d.reason]
     risks = [d.risk for d in dims if d.risk]
     recommended = total >= int(mcfg.get("recommend_threshold", 55))
+    if notice.registration_deadline is not None and today > notice.registration_deadline:
+        recommended = False
 
     return MatchResult(
         notice=notice,
